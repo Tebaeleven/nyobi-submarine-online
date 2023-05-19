@@ -9,18 +9,19 @@ function createWebSocketServer(io, game) {
         const displayName = socket.handshake.query.displayName;
         const thumbUrl = socket.handshake.query.thumbUrl;
 
-        console.log('WebSocket のコネクションがありました。');
+        const startObj = game.newConnection(socket.id, displayName, thumbUrl);
+        socket.emit('start data', startObj); //接続が来たユーザにデータを送信
 
-        socket.emit('start data', {}); //接続が来たユーザにデータを送信
-
-        socket.on('disconnect', () => { }); //ユーザが接続を切断した時に実行
+        socket.on('disconnect', () => { //ユーザが接続を切断した時に実行
+            game.disconnect(socket.id)
+        }); 
     });
 
     //全員に送る
     const socketTicker = setInterval(() => {
         //volatile.emit はクライアントにデータが届いたかを確認しない送信方法
         //確認の処理が省けるので、高頻度な通信をする場合に便利
-        rootIo.volatile.emit('map data', {});
+        rootIo.volatile.emit('map data', game.getMapData());
     },
     66);
 }
