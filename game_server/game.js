@@ -22,6 +22,10 @@ function init() {
 
 init(); // 初期化（初期化はサーバ起動時に行う
 
+const gameTicker = setInterval(() => {
+    movePlayers(gameObj.playersMap); // 潜水艦の移動
+}, 33);
+
 function newConnection(socketId, displayName, thumbUrl) {
     const playerX = Math.floor(Math.random() * gameObj.fieldWidth);
     const playerY = Math.floor(Math.random() * gameObj.fieldHeight);
@@ -91,6 +95,11 @@ function disconnect(socketId) {
     gameObj.playersMap.delete(socketId);
 }
 
+function updatePlayerDirection(socketId, direction) {
+    const playerObj = gameObj.playersMap.get(socketId);
+    playerObj.direction = direction;
+}
+
 function addItem() {
     const itemX = Math.floor(Math.random() * gameObj.fieldWidth);
     const itemY = Math.floor(Math.random() * gameObj.fieldHeight);
@@ -123,8 +132,37 @@ function addAir() {
     gameObj.airMap.set(airKey, airObj)
 }
 
+function movePlayers(playersMap) { // 潜水艦の移動
+    for (let [playerId, player] of playersMap) {
+
+        if (player.isAlive === false) {
+            continue;
+        }
+
+        switch (player.direction) {
+            case 'left':
+                player.x -= 1;
+                break;
+            case 'up':
+                player.y -= 1;
+                break;
+            case 'down':
+                player.y += 1;
+                break;
+            case 'right':
+                player.x += 1;
+                break;
+        }
+        if (player.x > gameObj.fieldWidth) player.x -= gameObj.fieldWidth;
+        if (player.x < 0) player.x += gameObj.fieldWidth;
+        if (player.y < 0) player.y += gameObj.fieldHeight;
+        if (player.y > gameObj.fieldHeight) player.y -= gameObj.fieldHeight;
+    }
+}
+
 module.exports = {
     newConnection,
     getMapData,
-    disconnect
+    disconnect,
+    updatePlayerDirection
 };

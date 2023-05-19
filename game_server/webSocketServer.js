@@ -12,6 +12,10 @@ function createWebSocketServer(io, game) {
         const startObj = game.newConnection(socket.id, displayName, thumbUrl);
         socket.emit('start data', startObj); //接続が来たユーザにデータを送信
 
+        socket.on('change direction', (direction) => {
+            game.updatePlayerDirection(socket.id, direction);
+        });
+
         socket.on('disconnect', () => { //ユーザが接続を切断した時に実行
             game.disconnect(socket.id)
         }); 
