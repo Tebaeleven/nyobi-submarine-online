@@ -16,6 +16,10 @@ function createWebSocketServer(io, game) {
             game.updatePlayerDirection(socket.id, direction);
         });
 
+        socket.on('missile emit', (direction) => {
+            game.missileEmit(socket.id, direction);
+        });
+        
         socket.on('disconnect', () => { //ユーザが接続を切断した時に実行
             game.disconnect(socket.id)
         }); 

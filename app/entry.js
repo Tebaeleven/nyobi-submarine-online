@@ -18,12 +18,19 @@ const gameObj = {
         'down': 90,
         'right': 0
     },
+    rotationDegreeByFlyingMissileDirection: {
+        'left': 270,
+        'up': 0,
+        'down': 180,
+        'right': 90
+    },
     myDisplayName: $('#main').attr('data-displayName'),
     myThumbUrl: $('#main').attr('data-thumbUrl'),
     fieldWidth: null,
     fieldHeight: null,
     itemsMap: new Map(),
-    airMap: new Map()
+    airMap: new Map(),
+    flyingMissilesMap: new Map()
 }
 
 const socketQueryParameters = `displayName=${gameObj.myDisplayName}&thumbUrl=${gameObj.myThumbUrl}`;
@@ -75,6 +82,8 @@ function ticker() {
     gameObj.ctxScore.clearRect(0, 0, gameObj.scoreCanvasWidth, gameObj.scoreCanvasHeight); // scoreCanvas もまっさら
     drawAirTimer(gameObj.ctxScore, gameObj.myPlayerObj.airTime);
     drawMissiles(gameObj.ctxScore, gameObj.myPlayerObj.missilesMany);
+
+    moveInClient(gameObj.myPlayerObj, gameObj.flyingMissilesMap);
 
     gameObj.counter = (gameObj.counter + 1) % 10000;
 }
@@ -167,11 +176,13 @@ socket.on('start data', (startObj) => {
     gameObj.fieldWidth = startObj.fieldWidth;
     gameObj.fieldHeight = startObj.fieldHeight;
     gameObj.myPlayerObj = startObj.playerObj;
+    gameObj.missileSpeed = startObj.missileSpeed;
 });
 socket.on('map data', (compressed) => {
     const playersArray = compressed[0];
     const itemsArray = compressed[1];
     const airArray = compressed[2];
+    const flyingMissilesArray = compressed[3];
 
     gameObj.playersMap = new Map();
     for (let compressedPlayerData of playersArray) {
@@ -227,6 +238,16 @@ socket.on('map data', (compressed) => {
     // console.log(gameObj.playersMap);
     // console.log(gameObj.itemsMap);
     // console.log(gameObj.airMap);
+
+    gameObj.flyingMissilesMap = new Map();
+    flyingMissilesArray.forEach((compressedFlyingMissileData, index) => {
+        gameObj.flyingMissilesMap.set(index, {
+            x: compressedFlyingMissileData[0],
+            y: compressedFlyingMissileData[1],
+            direction: compressedFlyingMissileData[2],
+            emitPlayerId: compressedFlyingMissileData[3]
+        });
+    });
 });
 function getRadian(deg) { //角度をラジアンに変換
     return deg * Math.PI / 180
@@ -311,6 +332,100 @@ function drawMap(gameObj) {
 
     drawObj(gameObj.itemsMap, 255, 165, 0);
     drawObj(gameObj.airMap, 0, 220, 255);
+
+
+    // 飛んでいるミサイルの描画
+    for (let [missileId, flyingMissile] of gameObj.flyingMissilesMap) {
+
+        const distanceObj = calculationBetweenTwoPoints(
+            gameObj.myPlayerObj.x, gameObj.myPlayerObj.y,
+            flyingMissile.x, flyingMissile.y,
+            gameObj.fieldWidth, gameObj.fieldHeight,
+            gameObj.raderCanvasWidth, gameObj.raderCanvasHeight
+        );
+
+        if (
+            distanceObj.distanceX <= (gameObj.raderCanvasWidth / 2 + 50) &&
+            distanceObj.distanceY <= (gameObj.raderCanvasHeight / 2 + 50)
+        ) {
+
+            if (flyingMissile.emitPlayerId === gameObj.myPlayerObj.playerId) { // 自分自身のミサイルの描画
+
+                const rotationDegree = gameObj.rotationDegreeByFlyingMissileDirection[flyingMissile.direction];
+                gameObj.ctxRader.save();
+                gameObj.ctxRader.translate(distanceObj.drawX, distanceObj.drawY);
+                gameObj.ctxRader.rotate(getRadian(rotationDegree));
+                gameObj.ctxRader.drawImage(
+                    gameObj.missileImage, -gameObj.missileImage.width / 2, -gameObj.missileImage.height / 2
+                );
+                gameObj.ctxRader.restore();
+
+                gameObj.ctxRader.strokeStyle = "rgba(250, 250, 250, 0.9)";
+                gameObj.ctxRader.fillStyle = "rgba(250, 250, 250, 0.9)";
+                gameObj.ctxRader.beginPath();
+                gameObj.ctxRader.moveTo(distanceObj.drawX, distanceObj.drawY);
+                gameObj.ctxRader.lineTo(distanceObj.drawX + 20, distanceObj.drawY - 20);
+                gameObj.ctxRader.lineTo(distanceObj.drawX + 20 + 35, distanceObj.drawY - 20);
+                gameObj.ctxRader.stroke();
+
+                gameObj.ctxRader.font = '11px Arial';
+                gameObj.ctxRader.fillText('missile', distanceObj.drawX + 20, distanceObj.drawY - 20 - 2);
+
+            } else { // 他人のミサイルの描画
+
+                const degreeDiff = calcDegreeDiffFromRadar(gameObj.deg, distanceObj.degree);
+                const toumeido = calcOpacity(degreeDiff);
+
+                const drawRadius1 = gameObj.counter % 8 + 2 + 20;
+                const clearRadius1 = drawRadius1 - 2;
+                const drawRadius2 = gameObj.counter % 8 + 2 + 10;
+                const clearRadius2 = drawRadius2 - 2;
+                const drawRadius3 = gameObj.counter % 8 + 2 + 0;
+                const clearRadius3 = drawRadius3 - 2;
+
+                gameObj.ctxRader.fillStyle = `rgba(255, 0, 0, ${toumeido})`;
+                gameObj.ctxRader.beginPath();
+                gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, drawRadius1, 0, Math.PI * 2, true);
+                gameObj.ctxRader.fill();
+
+                gameObj.ctxRader.fillStyle = "rgb(0, 20, 50)";
+                gameObj.ctxRader.beginPath();
+                gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, clearRadius1, 0, Math.PI * 2, true);
+                gameObj.ctxRader.fill();
+
+                gameObj.ctxRader.fillStyle = `rgba(255, 0, 0, ${toumeido})`;
+                gameObj.ctxRader.beginPath();
+                gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, drawRadius2, 0, Math.PI * 2, true);
+                gameObj.ctxRader.fill();
+
+                gameObj.ctxRader.fillStyle = "rgb(0, 20, 50)";
+                gameObj.ctxRader.beginPath();
+                gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, clearRadius2, 0, Math.PI * 2, true);
+                gameObj.ctxRader.fill();
+
+                gameObj.ctxRader.fillStyle = `rgba(255, 0, 0, ${toumeido})`;
+                gameObj.ctxRader.beginPath();
+                gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, drawRadius3, 0, Math.PI * 2, true);
+                gameObj.ctxRader.fill();
+
+                gameObj.ctxRader.fillStyle = "rgb(0, 20, 50)";
+                gameObj.ctxRader.beginPath();
+                gameObj.ctxRader.arc(distanceObj.drawX, distanceObj.drawY, clearRadius3, 0, Math.PI * 2, true);
+                gameObj.ctxRader.fill();
+
+                gameObj.ctxRader.strokeStyle = `rgba(250, 250, 250, ${toumeido})`;
+                gameObj.ctxRader.fillStyle = `rgba(250, 250, 250, ${toumeido})`;
+                gameObj.ctxRader.beginPath();
+                gameObj.ctxRader.moveTo(distanceObj.drawX, distanceObj.drawY);
+                gameObj.ctxRader.lineTo(distanceObj.drawX + 30, distanceObj.drawY - 30);
+                gameObj.ctxRader.lineTo(distanceObj.drawX + 30 + 35, distanceObj.drawY - 30);
+                gameObj.ctxRader.stroke();
+
+                gameObj.ctxRader.font = '11px Arial';
+                gameObj.ctxRader.fillText('missile', distanceObj.drawX + 30, distanceObj.drawY - 30 - 2);
+            }
+        }
+    }
 }
 
 
@@ -450,9 +565,88 @@ $(window).on("keydown", (event) => {
             drawSubmarine(gameObj.ctxRader, gameObj.myPlayerObj);
             sendChangeDirection(socket, 'right');
             break;
+        case ' ': // スペースキー
+            if (gameObj.myPlayerObj.missilesMany <= 0) break; // ミサイルのストックが 0
+
+            gameObj.myPlayerObj.missilesMany -= 1;
+            const missileId = Math.floor(Math.random() * 100000) + ',' + gameObj.myPlayerObj.socketId + ',' + gameObj.myPlayerObj.x + ',' + gameObj.myPlayerObj.y;
+
+            const missileObj = {
+                emitPlayerId: gameObj.myPlayerObj.playerId,
+                x: gameObj.myPlayerObj.x,
+                y: gameObj.myPlayerObj.y,
+                direction: gameObj.myPlayerObj.direction,
+                id: missileId
+            };
+            gameObj.flyingMissilesMap.set(missileId, missileObj);
+            sendMissileEmit(socket, gameObj.myPlayerObj.direction);
+            break;
     }
 });
 
 function sendChangeDirection(socket, direction) {
     socket.emit('change direction', direction);
+}
+
+function sendMissileEmit(socket, direction) {
+    socket.emit('missile emit', direction);
+}
+
+function moveInClient(myPlayerObj, flyingMissilesMap) {
+
+    if (myPlayerObj.isAlive === false) {
+        if (myPlayerObj.deadCount < 60) {
+            myPlayerObj.deadCount += 1;
+        }
+        return;
+    }
+
+    // 移動
+    switch (myPlayerObj.direction) {
+        case 'left':
+            myPlayerObj.x -= 1;
+            break;
+        case 'up':
+            myPlayerObj.y -= 1;
+            break;
+        case 'down':
+            myPlayerObj.y += 1;
+            break;
+        case 'right':
+            myPlayerObj.x += 1;
+            break;
+    }
+    if (myPlayerObj.x > gameObj.fieldWidth) myPlayerObj.x -= gameObj.fieldWidth;
+    if (myPlayerObj.x < 0) myPlayerObj.x += gameObj.fieldWidth;
+    if (myPlayerObj.y < 0) myPlayerObj.y += gameObj.fieldHeight;
+    if (myPlayerObj.y > gameObj.fieldHeight) myPlayerObj.y -= gameObj.fieldHeight;
+
+    myPlayerObj.aliveTime.clock += 1;
+    if (myPlayerObj.aliveTime.clock === 30) {
+        myPlayerObj.aliveTime.clock = 0;
+        myPlayerObj.aliveTime.seconds += 1;
+    }
+
+    // 飛んでいるミサイルの移動
+    for (let [missileId, flyingMissile] of flyingMissilesMap) {
+
+        switch (flyingMissile.direction) {
+            case 'left':
+                flyingMissile.x -= gameObj.missileSpeed;
+                break;
+            case 'up':
+                flyingMissile.y -= gameObj.missileSpeed;
+                break;
+            case 'down':
+                flyingMissile.y += gameObj.missileSpeed;
+                break;
+            case 'right':
+                flyingMissile.x += gameObj.missileSpeed;
+                break;
+        }
+        if (flyingMissile.x > gameObj.fieldWidth) flyingMissile.x -= gameObj.fieldWidth;
+        if (flyingMissile.x < 0) flyingMissile.x += gameObj.fieldWidth;
+        if (flyingMissile.y < 0) flyingMissile.y += gameObj.fieldHeight;
+        if (flyingMissile.y > gameObj.fieldHeight) flyingMissile.y -= gameObj.fieldHeight;
+    }
 }
