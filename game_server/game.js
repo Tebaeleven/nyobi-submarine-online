@@ -20,6 +20,8 @@ const gameObj = {
     itemRadius: 4,
     airRadius: 6,
     addAirTime: 30,
+    itemPoint: 3,
+    killPoint: 500,
     submarineImageWidth: 42
 };
 
@@ -311,6 +313,7 @@ function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
 
                 gameObj.itemsMap.delete(itemKey);
                 playerObj.missilesMany = playerObj.missilesMany > 5 ? 6 : playerObj.missilesMany + 1;
+                playerObj.score += gameObj.itemPoint;
                 addItem();
             }
         }
@@ -333,6 +336,7 @@ function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
                 } else {
                     playerObj.airTime += gameObj.addAirTime;
                 }
+                playerObj.score += gameObj.itemPoint;
                 addAir();
             }
         }
@@ -350,6 +354,12 @@ function checkGetItem(playersMap, itemsMap, airMap, flyingMissilesMap) {
                 playerObj.playerId !== flyingMissile.emitPlayerId
             ) {
                 playerObj.isAlive = false;
+                // 得点の更新
+                if (playersMap.has(flyingMissile.emitPlayerSocketId)) { //ミサイルを投げたプレイヤーがいるか
+                    const emitPlayer = playersMap.get(flyingMissile.emitPlayerSocketId);
+                    emitPlayer.score += gameObj.killPoint;
+                    playersMap.set(flyingMissile.emitPlayerSocketId, emitPlayer);
+                }
                 flyingMissilesMap.delete(missileId); // ミサイル（魚雷）の削除
             }
         }
