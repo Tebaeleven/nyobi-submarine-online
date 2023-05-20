@@ -47,6 +47,7 @@ function newConnection(socketId, displayName, thumbUrl) {
         missilesMany: 0,
         airTime: 99,
         aliveTime: { 'clock': 0, 'seconds': 0 },
+        deadCount: 0,
         score: 0
     };
     gameObj.playersMap.set(socketId, playerObj);
@@ -76,7 +77,8 @@ function getMapData() {
         playerDataForSend.push(plyer.direction);
         playerDataForSend.push(plyer.missilesMany);
         playerDataForSend.push(plyer.airTime);
-
+        playerDataForSend.push(plyer.deadCount);
+        
         playersArray.push(playerDataForSend);
     }
 
@@ -146,6 +148,11 @@ function movePlayers(playersMap) { // 潜水艦の移動
     for (let [playerId, player] of playersMap) {
 
         if (player.isAlive === false) {
+            if (player.deadCount < 70) {
+                player.deadCount += 1;
+            } else {
+                gameObj.playersMap.delete(playerId);
+            }
             continue;
         }
 
